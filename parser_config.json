@@ -17,6 +17,7 @@
     "host": "localhost",
     "port": 9200,
     "index": "parser-matches"
+    "bulkSize": 100
   },
   "forwarding": {
     "enabled": false,

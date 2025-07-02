@@ -1,55 +1,52 @@
 import java.io.*;
 import java.net.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-public class main {
+public class Main {
 
-	public static int ListenPort=5514;
-	/**
-	 * @param args
-	 */
-	public static void main(String[] args) {
+    public static final int LISTEN_PORT = 5514;
+    private static final int SOCKET_TIMEOUT_MS = 5000; // 5 másodperc timeout
+    private static final int THREAD_POOL_SIZE = 10; // Max 10 párhuzamos kliens
 
-		System.out.println("Hello world!");
+    public static void main(String[] args) {
+        System.out.println("Hello world!");
+        ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
 
-		ServerSocket echoServer = null;
-        String line;
-        DataInputStream is;
-        Socket clientSocket = null;
-        try {
-            echoServer = new ServerSocket(ListenPort);
-         }
-         catch (IOException e) {
-            System.out.println(e);
-         }   
-        try {
-            clientSocket = echoServer.accept();
-            is = new DataInputStream(clientSocket.getInputStream());
+        try (ServerSocket serverSocket = new ServerSocket(LISTEN_PORT)) {
+            System.out.println("Szerver figyel a porton: " + LISTEN_PORT);
 
             while (true) {
-              line = is.readLine();
-              if (line != null)
-              {
-            	  System.out.println(line);
-            	}
-              else
-              {
-            	  try {
-            	       is.close();
-            	       echoServer.close();
-            	    } 
-            	    catch (IOException e) {
-            	       System.out.println(e);
-            	    }
-            	  echoServer = new ServerSocket(ListenPort);
-            	  clientSocket = echoServer.accept();
-                  is = new DataInputStream(clientSocket.getInputStream());
-            	  System.out.println(ListenPort);
-              }
-            }
-         }   
-     catch (IOException e) {
-            System.out.println(e);
-         }
-	}
-}
+                try {
+                    Socket clientSocket = serverSocket.accept();
+                    clientSocket.setSoTimeout(SOCKET_TIMEOUT_MS);
 
+                    System.out.println("Új kapcsolat: " + clientSocket.getRemoteSocketAddress());
+
+                    executor.execute(() -> handleClient(clientSocket));
+
+                } catch (IOException e) {
+                    System.err.println("Hiba a kapcsolat elfogadásánál: " + e.getMessage());
+                }
+            }
+
+        } catch (IOException e) {
+            System.err.println("Nem lehet elindítani a szervert: " + e.getMessage());
+        } finally {
+            executor.shutdown(); // Leállítja a szálpoolt, ha a szerver bezár
+        }
+    }
+
+    private static void handleClient(Socket clientSocket) {
+        try (
+            BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+        ) {
+            String line;
+            while ((line = in.readLine()) != null) {
+                // Egyszerű validálás: csak nem üres sorokat írunk ki
+                if (!line.trim().isEmpty()) {
+                    System.out.println("[" + clientSocket.getRemoteSocketAddress() + "] " + line);
+                }
+            }
+        } catch (SocketTimeoutException e) {
+            System.err.println("Kapcsolat timeout: " + clientSocket.getRemoteSocketAdd

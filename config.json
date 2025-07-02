@@ -1,0 +1,8 @@
+{
+  "listenPort": 5514,
+  "sslEnabled": false,
+  "sslKeystorePath": "server.keystore",
+  "sslKeystorePassword": "password",
+  "socketTimeoutMs": 5000,
+  "threadPoolSize": 10
+}

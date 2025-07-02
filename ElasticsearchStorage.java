@@ -3,39 +3,62 @@
 import java.net.URI;
 import java.net.http.*;
 import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.*;
 
 public class ElasticsearchStorage implements StorageBackend {
     private final String endpoint;
     private final String index;
+    private final int bulkSize;
     private final HttpClient http;
+
+    private final List<String> bulkBuffer = new ArrayList<>();
+    private final Object lock = new Object();
 
     public ElasticsearchStorage(ServerConfig.ElasticsearchConfig cfg) {
         this.endpoint = "http://" + cfg.host + ":" + cfg.port;
         this.index = cfg.index;
+        this.bulkSize = cfg.bulkSize > 0 ? cfg.bulkSize : 100;
         this.http = HttpClient.newHttpClient();
     }
 
     @Override
     public void saveMatch(int patternId, String matchedText) {
-        try {
-            String json = String.format(
-                "{ \"timestamp\": \"%s\", \"matched_text\": %s, \"pattern_id\": %d }",
-                Instant.now().toString(),
-                escapeJson(matchedText),
-                patternId
-            );
+        String actionMeta = String.format("{\"index\":{}}");
+        String jsonData = String.format(
+            "{\"timestamp\":\"%s\",\"matched_text\":%s,\"pattern_id\":%d}",
+            Instant.now().toString(),
+            escapeJson(matchedText),
+            patternId
+        );
 
-            HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(endpoint + "/" + index + "/_doc"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
+        synchronized (lock) {
+            bulkBuffer.add(actionMeta);
+            bulkBuffer.add(jsonData);
 
-            http.sendAsync(req, HttpResponse.BodyHandlers.discarding());
-
-        } catch (Exception e) {
-            System.err.println("Elasticsearch mentési hiba: " + e.getMessage());
+            if (bulkBuffer.size() / 2 >= bulkSize) { // minden dokumentum 2 sorból áll (action + data)
+                flushBulk();
+            }
         }
+    }
+
+    private void flushBulk() {
+        String body = String.join("\n", bulkBuffer) + "\n"; // bulk végén kell newline
+
+        HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(endpoint + "/" + index + "/_bulk"))
+            .header("Content-Type", "application/x-ndjson")
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+
+        // Aszinkron küldés
+        http.sendAsync(req, HttpResponse.BodyHandlers.discarding())
+            .exceptionally(e -> {
+                System.err.println("Elasticsearch bulk hiba: " + e.getMessage());
+                return null;
+            });
+
+        bulkBuffer.clear();
     }
 
     private String escapeJson(String s) {
@@ -44,6 +67,10 @@ public class ElasticsearchStorage implements StorageBackend {
 
     @Override
     public void close() {
-        // Nincs zárandó erőforrás
+        synchronized (lock) {
+            if (!bulkBuffer.isEmpty()) {
+                flushBulk();
+            }
+        }
     }
 }

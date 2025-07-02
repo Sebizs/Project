@@ -16,11 +16,13 @@ public class ElasticsearchStorage implements StorageBackend {
     }
 
     @Override
-    public void save(String ip, String message) {
+    public void saveMatch(int patternId, String matchedText) {
         try {
             String json = String.format(
-                "{\"timestamp\":\"%s\",\"ip\":\"%s\",\"message\":%s}",
-                Instant.now().toString(), ip, escapeJson(message)
+                "{ \"timestamp\": \"%s\", \"matched_text\": %s, \"pattern_id\": %d }",
+                Instant.now().toString(),
+                escapeJson(matchedText),
+                patternId
             );
 
             HttpRequest req = HttpRequest.newBuilder()
@@ -32,16 +34,16 @@ public class ElasticsearchStorage implements StorageBackend {
             http.sendAsync(req, HttpResponse.BodyHandlers.discarding());
 
         } catch (Exception e) {
-            System.err.println("Elasticsearch hiba: " + e.getMessage());
+            System.err.println("Elasticsearch mentési hiba: " + e.getMessage());
         }
     }
 
-    private String escapeJson(String msg) {
-        return "\"" + msg.replace("\"", "\\\"") + "\"";
+    private String escapeJson(String s) {
+        return "\"" + s.replace("\"", "\\\"") + "\"";
     }
 
     @Override
     public void close() {
-        // nincs bezárandó erőforrás
+        // Nincs zárandó erőforrás
     }
 }

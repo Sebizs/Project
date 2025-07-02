@@ -1,0 +1,27 @@
+{
+  "listenPort": 5515,
+  "sslEnabled": true,
+  "sslKeystorePath": "server.keystore",
+  "sslKeystorePassword": "password",
+  "socketTimeoutMs": 5000,
+  "threadPoolSize": 10,
+  "storageBackend": "mysql", 
+  "mysql": {
+    "host": "localhost",
+    "port": 3306,
+    "database": "parserdb",
+    "user": "parseruser",
+    "password": "parserpass"
+  },
+  "elasticsearch": {
+    "host": "localhost",
+    "port": 9200,
+    "index": "parser-matches"
+  },
+  "forwarding": {
+    "enabled": false,
+    "host": "parser.example.com",
+    "port": 6515,
+    "useTls": false
+  }
+}
